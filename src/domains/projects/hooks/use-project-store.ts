@@ -107,6 +107,96 @@ export function useProjectStore() {
     [projects]
   );
 
+  const createTask = useCallback(
+    (
+      projectCode: string,
+      data: {
+        title: string;
+        detail: string;
+        assigneeAlias: string;
+        priority: Task['priority'];
+        status: Task['status'];
+        dueDate?: string;
+        dependency?: string;
+      }
+    ) => {
+      const project = projects.find(p => p.code === projectCode);
+      if (!project) throw new Error(`Project ${projectCode} not found`);
+
+      const projectTasks = tasks.filter(t => t.projectCode === projectCode);
+      const taskNumbers = projectTasks.map(t => {
+        const match = t.code.match(/-T(\d+)$/);
+        return match ? parseInt(match[1], 10) : 0;
+      });
+      const nextNum = Math.max(0, ...taskNumbers) + 1;
+      const code = `${projectCode}-T${String(nextNum).padStart(2, '0')}`;
+
+      const assignee = team.find(m => m.alias === data.assigneeAlias);
+      const dueDate = data.dueDate?.trim() ? data.dueDate : null;
+      const isOverdue = dueDate
+        ? new Date(dueDate) < new Date(new Date().toDateString())
+        : false;
+
+      const task: Task = {
+        code,
+        projectCode,
+        engagementType: project.engagementType,
+        clientAlias: project.clientAlias,
+        projectName: project.name,
+        assigneeAlias: data.assigneeAlias,
+        assigneeRole: assignee?.role ?? '',
+        priority: data.priority,
+        status: data.status,
+        dueDate,
+        isOverdue,
+        dependency: data.dependency?.trim() ?? '',
+        title: data.title.trim(),
+        detail: data.detail.trim(),
+        lastProgress: data.detail.trim()
+      };
+
+      const updatedTasks = [...tasks, task];
+      setTasks(updatedTasks);
+      saveToStorage(STORAGE_KEYS.tasks, updatedTasks);
+
+      const updatedProjects = projects.map(p => {
+        if (p.code !== projectCode) return p;
+        return {
+          ...p,
+          openTasks: p.openTasks + 1,
+          overdueTasks: isOverdue ? p.overdueTasks + 1 : p.overdueTasks,
+          blockers: data.status === 'bloqueada' ? p.blockers + 1 : p.blockers
+        };
+      });
+      setProjects(updatedProjects);
+      saveToStorage(STORAGE_KEYS.projects, updatedProjects);
+
+      if (assignee) {
+        const isHighOrCritical =
+          data.priority === 'critica' || data.priority === 'alta';
+        const updatedTeam = team.map(m => {
+          if (m.alias !== data.assigneeAlias) return m;
+          return {
+            ...m,
+            openTasksAssigned: m.openTasksAssigned + 1,
+            blockedTasksAssigned:
+              data.status === 'bloqueada'
+                ? m.blockedTasksAssigned + 1
+                : m.blockedTasksAssigned,
+            highOrCriticalOpen: isHighOrCritical
+              ? m.highOrCriticalOpen + 1
+              : m.highOrCriticalOpen
+          };
+        });
+        setTeam(updatedTeam);
+        saveToStorage(STORAGE_KEYS.team, updatedTeam);
+      }
+
+      return task;
+    },
+    [projects, tasks, team]
+  );
+
   return {
     projects,
     tasks,
@@ -116,6 +206,7 @@ export function useProjectStore() {
     getProjectTasks,
     createProject,
     updateProject,
-    deleteProject
+    deleteProject,
+    createTask
   };
 }

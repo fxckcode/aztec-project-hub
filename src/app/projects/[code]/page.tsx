@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import { ArrowLeft, Pencil, Save, X } from 'lucide-react';
+import { ArrowLeft, Pencil, Plus, Save, X } from 'lucide-react';
 import { useProjectStore } from '@/domains/projects/hooks/use-project-store';
 import {
   calculateProjectPriority,
@@ -10,13 +10,16 @@ import {
   suggestNextStep
 } from '@/domains/projects/utils/prioritization';
 import type { Project } from '@/domains/projects/types';
+import { TaskForm } from '@/domains/projects/components/task-form';
+import type { CreateTaskInput } from '@/domains/projects/create-task.schema';
+import { projectsMessages } from '@/domains/projects/messages';
 
 interface PageProps {
   params: Promise<{ code: string }>;
 }
 
 export default function ProjectDetailPage({ params }: PageProps) {
-  const { tasks, team, getProjectByCode, updateProject, loaded } =
+  const { tasks, team, getProjectByCode, updateProject, createTask, loaded } =
     useProjectStore();
   const [project, setProject] = useState<Project | null>(null);
   const [loading, setLoading] = useState(true);
@@ -25,6 +28,7 @@ export default function ProjectDetailPage({ params }: PageProps) {
   const [notesDraft, setNotesDraft] = useState('');
   const [editingNextStep, setEditingNextStep] = useState(false);
   const [nextStepDraft, setNextStepDraft] = useState('');
+  const [isAddingTask, setIsAddingTask] = useState(false);
 
   useEffect(() => {
     params.then(p => {
@@ -54,6 +58,11 @@ export default function ProjectDetailPage({ params }: PageProps) {
     updateProject(project.code, { nextStep: nextStepDraft });
     setProject({ ...project, nextStep: nextStepDraft });
     setEditingNextStep(false);
+  };
+
+  const handleCreateTask = async (data: CreateTaskInput) => {
+    if (!project) return;
+    createTask(project.code, data);
   };
 
   if (loading || !loaded) {
@@ -323,51 +332,92 @@ export default function ProjectDetailPage({ params }: PageProps) {
       </div>
 
       <div className="card">
-        <div className="border-brand-border border-b px-4 py-3">
+        <div className="border-brand-border flex items-center justify-between border-b px-4 py-3">
           <h2 className="text-brand-text-secondary text-sm font-semibold tracking-wider uppercase">
-            Tareas ({projectTasks.length})
+            {projectsMessages.taskList.heading} ({projectTasks.length})
           </h2>
-        </div>
-        <div className="divide-brand-border divide-y">
-          {projectTasks.map(task => (
-            <div
-              key={task.code}
-              className="hover:bg-brand-surface-hover px-4 py-3 transition-colors"
+          {!isAddingTask && (
+            <button
+              type="button"
+              onClick={() => setIsAddingTask(true)}
+              className="bg-brand-dark hover:bg-brand-dark-hover inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-white transition-colors"
             >
-              <div className="flex items-start justify-between">
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="text-brand-text-muted text-xs font-medium">
-                      {task.code}
-                    </span>
-                    <span
-                      className={`text-xs font-medium ${task.status === 'en-progreso' ? 'status-in-progress' : task.status === 'por-hacer' ? 'status-todo' : task.status === 'en-revision' ? 'status-review' : 'status-blocked'}`}
-                    >
-                      {task.status}
-                    </span>
-                    <span
-                      className={`text-xs font-medium ${task.priority === 'critica' ? 'priority-critical' : task.priority === 'alta' ? 'priority-high' : task.priority === 'media' ? 'priority-medium' : 'priority-low'}`}
-                    >
-                      {task.priority}
-                    </span>
-                    {task.isOverdue && (
-                      <span className="text-status-danger text-xs font-medium">
-                        VENCIDA
+              <Plus className="h-3.5 w-3.5" />
+              {projectsMessages.taskForm.addTask}
+            </button>
+          )}
+        </div>
+
+        {isAddingTask && (
+          <div className="border-brand-border border-b bg-gray-50/50 px-4 py-4">
+            <h3 className="text-brand-text mb-3 text-sm font-semibold">
+              {projectsMessages.taskForm.title}
+            </h3>
+            <TaskForm
+              defaultAssigneeAlias={project.ownerAlias}
+              onCreate={handleCreateTask}
+              onCancel={() => setIsAddingTask(false)}
+              onSuccess={() => setIsAddingTask(false)}
+            />
+          </div>
+        )}
+
+        <div className="divide-brand-border divide-y">
+          {projectTasks.length === 0 && !isAddingTask ? (
+            <div className="px-4 py-8 text-center">
+              <p className="text-brand-text-muted text-sm">
+                {projectsMessages.taskList.empty}
+              </p>
+              <button
+                type="button"
+                onClick={() => setIsAddingTask(true)}
+                className="text-brand-dark mt-3 inline-flex items-center gap-1.5 text-sm font-medium hover:underline"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                {projectsMessages.taskForm.addTask}
+              </button>
+            </div>
+          ) : (
+            projectTasks.map(task => (
+              <div
+                key={task.code}
+                className="hover:bg-brand-surface-hover px-4 py-3 transition-colors"
+              >
+                <div className="flex items-start justify-between">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-brand-text-muted text-xs font-medium">
+                        {task.code}
                       </span>
-                    )}
+                      <span
+                        className={`text-xs font-medium ${task.status === 'en-progreso' ? 'status-in-progress' : task.status === 'por-hacer' ? 'status-todo' : task.status === 'en-revision' ? 'status-review' : 'status-blocked'}`}
+                      >
+                        {task.status}
+                      </span>
+                      <span
+                        className={`text-xs font-medium ${task.priority === 'critica' ? 'priority-critical' : task.priority === 'alta' ? 'priority-high' : task.priority === 'media' ? 'priority-medium' : 'priority-low'}`}
+                      >
+                        {task.priority}
+                      </span>
+                      {task.isOverdue && (
+                        <span className="text-status-danger text-xs font-medium">
+                          {projectsMessages.taskList.overdue}
+                        </span>
+                      )}
+                    </div>
+                    <p className="mt-1 text-sm">{task.title}</p>
+                    <p className="text-brand-text-muted mt-0.5 line-clamp-2 text-xs">
+                      {task.detail}
+                    </p>
                   </div>
-                  <p className="mt-1 text-sm">{task.title}</p>
-                  <p className="text-brand-text-muted mt-0.5 line-clamp-2 text-xs">
-                    {task.detail}
-                  </p>
-                </div>
-                <div className="text-brand-text-muted ml-3 shrink-0 text-right text-xs">
-                  <div>{task.assigneeAlias.split(' ')[0]}</div>
-                  {task.dueDate && <div>{task.dueDate}</div>}
+                  <div className="text-brand-text-muted ml-3 shrink-0 text-right text-xs">
+                    <div>{task.assigneeAlias.split(' ')[0]}</div>
+                    {task.dueDate && <div>{task.dueDate}</div>}
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            ))
+          )}
         </div>
       </div>
     </div>
