@@ -62,7 +62,16 @@ export default function ProjectDetailPage({ params }: PageProps) {
 
   const handleCreateTask = async (data: CreateTaskInput) => {
     if (!project) return;
-    createTask(project.code, data);
+    const task = createTask(project.code, data);
+    setProject({
+      ...project,
+      openTasks: project.openTasks + 1,
+      overdueTasks: task.isOverdue
+        ? project.overdueTasks + 1
+        : project.overdueTasks,
+      blockers:
+        data.status === 'bloqueada' ? project.blockers + 1 : project.blockers
+    });
   };
 
   if (loading || !loaded) {
